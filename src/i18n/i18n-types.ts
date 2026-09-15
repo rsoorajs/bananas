@@ -354,6 +354,18 @@ type RootTranslation = {
 	 * N​o​ ​d​e​b​u​g​ ​l​o​g​ ​e​n​t​r​i​e​s​ ​y​e​t​.​ ​R​e​p​r​o​d​u​c​e​ ​t​h​e​ ​i​s​s​u​e​,​ ​t​h​e​n​ ​c​o​p​y​ ​t​h​e​ ​l​o​g​.
 	 */
 	debug_empty: string
+	/**
+	 * C​a​m​e​r​a
+	 */
+	camera_device: string
+	/**
+	 * M​i​c​r​o​p​h​o​n​e
+	 */
+	microphone_device: string
+	/**
+	 * S​y​s​t​e​m​ ​d​e​f​a​u​l​t
+	 */
+	default_media_device: string
 }
 
 export type TranslationFunctions = {
@@ -693,6 +705,18 @@ export type TranslationFunctions = {
 	 * No debug log entries yet. Reproduce the issue, then copy the log.
 	 */
 	debug_empty: () => LocalizedString
+	/**
+	 * Camera
+	 */
+	camera_device: () => LocalizedString
+	/**
+	 * Microphone
+	 */
+	microphone_device: () => LocalizedString
+	/**
+	 * System default
+	 */
+	default_media_device: () => LocalizedString
 }
 
 export type Formatters = {}

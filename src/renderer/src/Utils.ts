@@ -50,6 +50,13 @@ const hasUdpCandidate = (lines: string[]): boolean =>
     return parts[2]?.toLowerCase() === 'udp'
   })
 
+export const mediaTrackConstraints = (
+  deviceId: string | undefined | null,
+): boolean | MediaTrackConstraints => {
+  if (!deviceId) return true
+  return { deviceId: { ideal: deviceId } }
+}
+
 /** Native RTCSessionDescription stores type/sdp as prototype getters, so object spread drops them. */
 export const cloneSessionDescription = (
   desc: RTCSessionDescriptionInit,

@@ -89,6 +89,9 @@ const pt_br = {
   debug_clear: 'Limpar log',
   debug_copy: 'Copiar log',
   debug_empty: 'Nenhum log ainda. Reproduza o problema e copie o log.',
+  camera_device: 'Câmera',
+  microphone_device: 'Microfone',
+  default_media_device: 'Padrão do sistema',
 } satisfies BaseTranslation
 
 export default pt_br

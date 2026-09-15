@@ -15,6 +15,8 @@ export type SettingsData = {
   isMicrophoneEnabledOnConnect: boolean
   hardwareVideoAcceleration: boolean
   debugLogsEnabled: boolean
+  cameraDeviceId: string
+  microphoneDeviceId: string
   iceServers: IceServer[]
 }
 
@@ -42,6 +44,8 @@ export const defaultSettings: SettingsData = {
   isMicrophoneEnabledOnConnect: true,
   hardwareVideoAcceleration: true,
   debugLogsEnabled: false,
+  cameraDeviceId: '',
+  microphoneDeviceId: '',
   iceServers: [
     {
       urls: 'stun:stun.l.google.com:19302',

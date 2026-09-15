@@ -89,6 +89,9 @@ const fr = {
   debug_clear: 'Effacer le journal',
   debug_copy: 'Copier le journal',
   debug_empty: 'Aucun journal pour le moment. Reproduisez le problème, puis copiez le journal.',
+  camera_device: 'Caméra',
+  microphone_device: 'Microphone',
+  default_media_device: 'Par défaut du système',
 } satisfies BaseTranslation
 
 export default fr

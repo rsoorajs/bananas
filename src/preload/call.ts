@@ -49,6 +49,8 @@ const KiwiApi = {
     isMicrophoneEnabledOnConnect: boolean
     hardwareVideoAcceleration: boolean
     debugLogsEnabled: boolean
+    cameraDeviceId: string
+    microphoneDeviceId: string
     iceServers: IceServer[]
   }> => {
     return await ipcRenderer.invoke('getSettings')

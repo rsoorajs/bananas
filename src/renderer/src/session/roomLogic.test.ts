@@ -5,9 +5,11 @@ import {
   castVote,
   electCoordinator,
   nextCoordinator,
+  pickRemoteCameraAndDisplay,
   routeMeshSignal,
   sessionEndedReasonAfterDeparture,
   startVote,
+  uniquePeersById,
   voteOutcome,
 } from './roomLogic'
 import { VOTE_COOLDOWN_MS, VOTE_TIMEOUT_MS, truncateChatText } from './constants'
@@ -204,5 +206,53 @@ describe('chat text', () => {
   it('truncates oversize text', () => {
     expect(truncateChatText('hello')).toBe('hello')
     expect(truncateChatText('x'.repeat(2001)).length).toBe(2000)
+  })
+})
+
+describe('uniquePeersById', () => {
+  it('keeps the first entry for a repeated id', () => {
+    expect(
+      uniquePeersById([
+        { id: 'host', username: 'Kiwi' },
+        { id: 'guest', username: 'Joiner' },
+        { id: 'host', username: 'Kiwi-dup' },
+      ]),
+    ).toEqual([
+      { id: 'host', username: 'Kiwi' },
+      { id: 'guest', username: 'Joiner' },
+    ])
+  })
+})
+
+describe('pickRemoteCameraAndDisplay', () => {
+  it('uses the announced stream id when it is present', () => {
+    expect(
+      pickRemoteCameraAndDisplay({
+        streamIds: ['display', 'camera'],
+        camera: { enabled: true, streamId: 'camera' },
+        isPresenter: true,
+      }),
+    ).toEqual({ cameraStreamId: 'camera', displayStreamId: 'display' })
+  })
+
+  it('treats a non-presenter video as the camera when ids do not match', () => {
+    expect(
+      pickRemoteCameraAndDisplay({
+        streamIds: ['recv-1'],
+        camera: { enabled: true, streamId: 'sender-id' },
+        isPresenter: false,
+      }),
+    ).toEqual({ cameraStreamId: 'recv-1', displayStreamId: null })
+  })
+
+  it('picks the non-display video as camera for a presenter', () => {
+    expect(
+      pickRemoteCameraAndDisplay({
+        streamIds: ['screen', 'webcam'],
+        camera: { enabled: true, streamId: 'missing' },
+        isPresenter: true,
+        existingDisplayStreamId: 'screen',
+      }),
+    ).toEqual({ cameraStreamId: 'webcam', displayStreamId: 'screen' })
   })
 })

@@ -111,6 +111,42 @@ export const sessionEndedReasonAfterDeparture = (params: {
   return null
 }
 
+export const uniquePeersById = <T extends { id: string }>(peers: T[]): T[] => {
+  const seen = new Set<string>()
+  const unique: T[] = []
+  for (const peer of peers) {
+    if (seen.has(peer.id)) continue
+    seen.add(peer.id)
+    unique.push(peer)
+  }
+  return unique
+}
+
+export const pickRemoteCameraAndDisplay = (params: {
+  streamIds: string[]
+  camera?: { enabled: boolean; streamId: string } | null
+  isPresenter: boolean
+  existingDisplayStreamId?: string | null
+}): { cameraStreamId: string | null; displayStreamId: string | null } => {
+  const { streamIds, camera, isPresenter, existingDisplayStreamId } = params
+  let cameraStreamId: string | null = null
+  if (camera?.enabled) {
+    if (camera.streamId && streamIds.includes(camera.streamId)) {
+      cameraStreamId = camera.streamId
+    } else if (!isPresenter) {
+      cameraStreamId = streamIds[0] ?? null
+    } else if (existingDisplayStreamId) {
+      cameraStreamId = streamIds.find((id) => id !== existingDisplayStreamId) ?? null
+    } else if (streamIds.length > 1) {
+      cameraStreamId = streamIds.at(-1) ?? null
+    }
+  }
+  const displayStreamId =
+    streamIds.find((id) => id !== cameraStreamId) ??
+    (isPresenter && !cameraStreamId ? (streamIds[0] ?? null) : null)
+  return { cameraStreamId, displayStreamId }
+}
+
 export const routeMeshSignal = (params: {
   localPeerId: string
   coordinatorId: string

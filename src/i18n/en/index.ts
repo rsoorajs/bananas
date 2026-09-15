@@ -89,6 +89,9 @@ const en = {
   debug_clear: 'Clear log',
   debug_copy: 'Copy log',
   debug_empty: 'No debug log entries yet. Reproduce the issue, then copy the log.',
+  camera_device: 'Camera',
+  microphone_device: 'Microphone',
+  default_media_device: 'System default',
 } satisfies BaseTranslation
 
 export default en

@@ -12,12 +12,12 @@ export class CallLoopback {
   private trackPeerIds = new Map<string, string>()
   private pendingIce: RTCIceCandidateInit[] = []
   private makingOffer = false
+  private needsOffer = false
 
   async start(): Promise<void> {
     if (this.pc) return
     const pc = new RTCPeerConnection(LOOPBACK_RTC_CONFIG)
     this.pc = pc
-    pc.createDataChannel('loop')
     pc.onicecandidate = (event): void => {
       if (event.candidate) {
         window.KiwiApi.sendCallLoopIce?.(event.candidate.toJSON())
@@ -32,12 +32,16 @@ export class CallLoopback {
     const pc = this.pc
     if (!pc) return
     const wanted = new Set<string>()
+    let changed = false
     for (const source of sources) {
       for (const track of source.stream.getVideoTracks()) {
         wanted.add(track.id)
         this.trackPeerIds.set(track.id, source.peerId)
         const already = pc.getSenders().some((sender) => sender.track?.id === track.id)
-        if (!already) pc.addTrack(track, source.stream)
+        if (!already) {
+          pc.addTrack(track, source.stream)
+          changed = true
+        }
       }
     }
     for (const sender of pc.getSenders()) {
@@ -46,7 +50,10 @@ export class CallLoopback {
       if (wanted.has(track.id)) continue
       pc.removeTrack(sender)
       this.trackPeerIds.delete(track.id)
+      changed = true
     }
+    this.publishMids()
+    if (changed) void this.createAndSendOffer()
   }
 
   async handleAnswer(sdp: RTCSessionDescriptionInit): Promise<void> {
@@ -54,6 +61,10 @@ export class CallLoopback {
     if (!pc) return
     await pc.setRemoteDescription(sdp)
     await this.flushIce()
+    if (this.needsOffer) {
+      this.needsOffer = false
+      void this.createAndSendOffer()
+    }
   }
 
   async addIce(candidate: RTCIceCandidateInit): Promise<void> {
@@ -70,11 +81,16 @@ export class CallLoopback {
     this.trackPeerIds.clear()
     this.pendingIce = []
     this.makingOffer = false
+    this.needsOffer = false
   }
 
   private async createAndSendOffer(): Promise<void> {
     const pc = this.pc
-    if (!pc || this.makingOffer) return
+    if (!pc) return
+    if (this.makingOffer || pc.signalingState !== 'stable') {
+      this.needsOffer = true
+      return
+    }
     try {
       this.makingOffer = true
       const offer = await pc.createOffer()
@@ -85,6 +101,10 @@ export class CallLoopback {
       console.error(error)
     } finally {
       this.makingOffer = false
+      if (this.needsOffer && pc.signalingState === 'stable') {
+        this.needsOffer = false
+        void this.createAndSendOffer()
+      }
     }
   }
 

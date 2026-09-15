@@ -4,6 +4,7 @@
   import { L } from './translations'
   import { appState } from './appState.svelte'
   import { debugLog } from './debugLog.svelte'
+  import { mediaTrackConstraints } from './Utils'
 
   let colorPreviewIcon: HTMLElement | undefined = $state()
   let usernameValue = $state('Kiwi')
@@ -16,6 +17,10 @@
   let isMicrophoneEnabledOnConnect = $state(true)
   let hardwareVideoAcceleration = $state(true)
   let debugLogsEnabled = $state(false)
+  let cameraDeviceId = $state('')
+  let microphoneDeviceId = $state('')
+  let cameras = $state<MediaDeviceInfo[]>([])
+  let microphones = $state<MediaDeviceInfo[]>([])
   const isLinux = window.electron.process.platform === 'linux'
 
   const isUsernameValid = $derived(usernameValue.length > 0 && usernameValue.length < 32)
@@ -47,6 +52,8 @@
         isMicrophoneEnabledOnConnect,
         hardwareVideoAcceleration,
         debugLogsEnabled,
+        cameraDeviceId,
+        microphoneDeviceId,
         iceServers: iceServersValue.split('\n').map((srv) => JSON.parse(srv))
       })
       appState.debugLogsEnabled = debugLogsEnabled
@@ -64,16 +71,70 @@
       }, 2000)
     }
   }
-  onMount(async () => {
-    const settings = await window.KiwiApi.getSettings()
-    usernameValue = settings.username
-    colorValue = settings.color
-    language = settings.language
-    isMicrophoneEnabledOnConnect = settings.isMicrophoneEnabledOnConnect
-    hardwareVideoAcceleration = settings.hardwareVideoAcceleration
-    debugLogsEnabled = settings.debugLogsEnabled
-    iceServersValue = settings.iceServers.map((srv) => JSON.stringify(srv)).join('\n')
+  onMount(() => {
+    const onDeviceChange = (): void => {
+      void refreshMediaDevices()
+    }
+    void (async (): Promise<void> => {
+      const settings = await window.KiwiApi.getSettings()
+      usernameValue = settings.username
+      colorValue = settings.color
+      language = settings.language
+      isMicrophoneEnabledOnConnect = settings.isMicrophoneEnabledOnConnect
+      hardwareVideoAcceleration = settings.hardwareVideoAcceleration
+      debugLogsEnabled = settings.debugLogsEnabled
+      cameraDeviceId = settings.cameraDeviceId ?? ''
+      microphoneDeviceId = settings.microphoneDeviceId ?? ''
+      iceServersValue = settings.iceServers.map((srv) => JSON.stringify(srv)).join('\n')
+      await refreshMediaDevices()
+    })()
+    navigator.mediaDevices.addEventListener('devicechange', onDeviceChange)
+    return (): void => {
+      navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange)
+    }
   })
+
+  const unlockMediaLabels = async (): Promise<void> => {
+    const tryGet = async (constraints: MediaStreamConstraints): Promise<boolean> => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints)
+        for (const track of stream.getTracks()) track.stop()
+        return true
+      } catch {
+        return false
+      }
+    }
+    if (
+      await tryGet({
+        audio: mediaTrackConstraints(microphoneDeviceId),
+        video: mediaTrackConstraints(cameraDeviceId)
+      })
+    ) {
+      return
+    }
+    if (await tryGet({ audio: mediaTrackConstraints(microphoneDeviceId) })) return
+    await tryGet({ video: mediaTrackConstraints(cameraDeviceId) })
+  }
+
+  const refreshMediaDevices = async (): Promise<void> => {
+    await unlockMediaLabels()
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    cameras = devices.filter((device) => device.kind === 'videoinput' && device.deviceId)
+    microphones = devices.filter((device) => device.kind === 'audioinput' && device.deviceId)
+    if (cameras.length > 0 && cameraDeviceId && !cameras.some((device) => device.deviceId === cameraDeviceId)) {
+      cameraDeviceId = ''
+    }
+    if (
+      microphones.length > 0 &&
+      microphoneDeviceId &&
+      !microphones.some((device) => device.deviceId === microphoneDeviceId)
+    ) {
+      microphoneDeviceId = ''
+    }
+  }
+
+  const deviceLabel = (device: MediaDeviceInfo, index: number): string =>
+    device.label || `${device.kind} ${index + 1}`
 </script>
 
 <dialog class="modal" class:modal-open={modalSuccessIsActive}>
@@ -122,6 +183,26 @@
     </fieldset>
 
     <h2 class="text-xl font-semibold mt-2">{L.media()}</h2>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">{L.camera_device()}</legend>
+      <select class="select w-full" bind:value={cameraDeviceId} id="camera_device">
+        <option value="">{L.default_media_device()}</option>
+        {#each cameras as device, index (device.deviceId)}
+          <option value={device.deviceId}>{deviceLabel(device, index)}</option>
+        {/each}
+      </select>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">{L.microphone_device()}</legend>
+      <select class="select w-full" bind:value={microphoneDeviceId} id="microphone_device">
+        <option value="">{L.default_media_device()}</option>
+        {#each microphones as device, index (device.deviceId)}
+          <option value={device.deviceId}>{deviceLabel(device, index)}</option>
+        {/each}
+      </select>
+    </fieldset>
 
     <label class="label cursor-pointer justify-start gap-2">
       <input

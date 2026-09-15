@@ -1,7 +1,13 @@
 import type { CallChatMessage, CallPeerInfo } from '../callTypes'
 import type { RemoteCursorData, SettingsData } from '../types'
 import type { RTCSessionDescriptionOptions } from '../Utils'
-import { ConnectionType, dropTcpIceCandidates, getConnectionString, getUUIDv4 } from '../Utils'
+import {
+  ConnectionType,
+  dropTcpIceCandidates,
+  getConnectionString,
+  getUUIDv4,
+  mediaTrackConstraints,
+} from '../Utils'
 import { getRTCPeerConnectionConfig } from '../Config'
 import { appState } from '../appState.svelte'
 import {
@@ -22,10 +28,12 @@ import {
   canStartVote,
   castVote,
   nextCoordinator,
+  pickRemoteCameraAndDisplay,
   resumeVote,
   routeMeshSignal,
   sessionEndedReasonAfterDeparture,
   startVote,
+  uniquePeersById,
   voteOutcome,
   type SessionEndedReason,
   type VoteState,
@@ -196,6 +204,7 @@ export class Room {
   async Setup(v: HTMLVideoElement | null = null): Promise<'ok' | 'cancelled' | 'failed'> {
     debugLog.info('room', 'Setup start', { hasVideoEl: Boolean(v), role: v ? 'joiner' : 'host' })
     this.bindCallIpc()
+    await this.teardown(true)
     this.userSettings = await window.KiwiApi.getSettings()
     this.username = this.userSettings.username
     this.color = this.userSettings.color
@@ -209,7 +218,7 @@ export class Room {
     try {
       this.audioStream = await navigator.mediaDevices.getUserMedia({
         video: false,
-        audio: true,
+        audio: mediaTrackConstraints(this.userSettings.microphoneDeviceId),
       })
       for (const track of this.audioStream.getAudioTracks()) {
         track.enabled = this.userSettings.isMicrophoneEnabledOnConnect
@@ -703,11 +712,14 @@ export class Room {
   private async onRoster(msg: Extract<ControlMessage, { t: 'roster' }>): Promise<void> {
     this.coordinatorId = msg.coordinatorId
     this.presenterId = msg.presenterId
-    this.peers = msg.peers
+    this.peers = uniquePeersById(msg.peers)
     appState.isCoordinator = this.isCoordinator
-    for (const peer of msg.peers) {
+    const handshake = this.handshakeLink()
+    const handshakePending = Boolean(handshake && !handshake.remotePeerId)
+    for (const peer of this.peers) {
       if (peer.id === this.localPeerId) continue
       if (this.findLinkByRemote(peer.id)) continue
+      if (handshakePending) continue
       await this.startMeshTo(peer.id)
     }
     this.attachPresenterVideo()
@@ -980,8 +992,14 @@ export class Room {
     const entries = [...this.remoteVideoByStreamId.entries()].filter(
       ([, entry]) => entry.peerId === peerId,
     )
-    const cameraEntry = entries.find(([streamId]) => cam?.enabled && cam.streamId === streamId)
-    const displayEntry = entries.find(([, entry]) => entry.stream !== cameraEntry?.[1].stream)
+    const picked = pickRemoteCameraAndDisplay({
+      streamIds: entries.map(([streamId]) => streamId),
+      camera: cam,
+      isPresenter: peerId === this.presenterId,
+      existingDisplayStreamId: this.remoteVideoStreams.get(peerId)?.id ?? null,
+    })
+    const cameraEntry = entries.find(([streamId]) => streamId === picked.cameraStreamId)
+    const displayEntry = entries.find(([streamId]) => streamId === picked.displayStreamId)
     if (cameraEntry) this.remoteCameraStreams.set(peerId, cameraEntry[1].stream)
     else this.remoteCameraStreams.delete(peerId)
     if (displayEntry) this.remoteVideoStreams.set(peerId, displayEntry[1].stream)
@@ -1160,7 +1178,7 @@ export class Room {
 
   private upsertPeer(peer: RoomPeer): void {
     const others = this.peers.filter((item) => item.id !== peer.id)
-    this.peers = [...others, peer]
+    this.peers = uniquePeersById([...others, peer])
   }
 
   private removePeerById(peerId: string): void {
@@ -1195,17 +1213,18 @@ export class Room {
   }
 
   private broadcastRoster(): void {
-    const peers = this.peers.some((peer) => peer.id === this.localPeerId)
+    const withLocal = this.peers.some((peer) => peer.id === this.localPeerId)
       ? this.peers
       : [...this.peers, { id: this.localPeerId, username: this.username, color: this.color }]
-    this.peers = peers
+    this.peers = uniquePeersById(withLocal)
     this.broadcast({
       t: 'roster',
       v: PROTOCOL_VERSION,
-      peers,
+      peers: this.peers,
       coordinatorId: this.coordinatorId,
       presenterId: this.presenterId,
     })
+    this.syncCallOverlay()
   }
 
   private broadcast(msg: ControlMessage): void {
@@ -1296,6 +1315,13 @@ export class Room {
     this.localVoteCast = null
     this.displayStreamActive = false
     this.cursorsEnabled = false
+    this.peers = []
+    this.handshakeKey = null
+    this.lastCopiedPendingId = null
+    this.localPeerId = ''
+    this.coordinatorId = ''
+    this.presenterId = ''
+    this.closing.clear()
     window.KiwiApi.toggleRemoteCursors(false)
     appState.isCoordinator = false
     this.setConnectionState('disconnected')
@@ -1334,7 +1360,7 @@ export class Room {
   private async enableCamera(): Promise<void> {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: mediaTrackConstraints(this.userSettings?.cameraDeviceId),
         audio: false,
       })
       const track = stream.getVideoTracks()[0]
@@ -1348,7 +1374,12 @@ export class Room {
       this.stopStream(this.cameraStream)
       this.cameraStream = stream
       this.cameraActive = true
-      if (!this.cameraSendStreamId) this.cameraSendStreamId = stream.id
+      this.cameraSendStreamId = stream.id
+      debugLog.info('room', 'camera enabled', {
+        streamId: stream.id,
+        deviceId: track.getSettings().deviceId ?? '',
+        links: this.links.size,
+      })
       for (const link of this.links.values()) {
         await link.setCameraTrack(track, stream)
       }
@@ -1367,6 +1398,7 @@ export class Room {
     this.stopStream(this.cameraStream)
     this.cameraStream = null
     this.cameraActive = false
+    this.cameraSendStreamId = ''
     this.broadcastCameraState()
     this.syncCallOverlay()
   }
@@ -1411,7 +1443,7 @@ export class Room {
   }
 
   private callPeerInfos(): CallPeerInfo[] {
-    return this.peers.map((peer) => ({
+    return uniquePeersById(this.peers).map((peer) => ({
       id: peer.id,
       name: peer.username,
       color: peer.color,

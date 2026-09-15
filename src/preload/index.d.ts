@@ -52,6 +52,8 @@ type KiwiApi = {
     isMicrophoneEnabledOnConnect: boolean
     hardwareVideoAcceleration: boolean
     debugLogsEnabled: boolean
+    cameraDeviceId: string
+    microphoneDeviceId: string
     iceServers: IceServer[]
   }) => Promise<void>
   getSettings: () => Promise<{
@@ -61,6 +63,8 @@ type KiwiApi = {
     isMicrophoneEnabledOnConnect: boolean
     hardwareVideoAcceleration: boolean
     debugLogsEnabled: boolean
+    cameraDeviceId: string
+    microphoneDeviceId: string
     iceServers: IceServer[]
   }>
   getAppVersion: () => Promise<string>

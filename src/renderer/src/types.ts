@@ -15,9 +15,12 @@ type IceServer = {
 export type SettingsData = {
   username: string
   color: string
+  language?: string
   isMicrophoneEnabledOnConnect: boolean
   hardwareVideoAcceleration: boolean
   debugLogsEnabled: boolean
+  cameraDeviceId?: string
+  microphoneDeviceId?: string
   iceServers: IceServer[]
 }
 

@@ -6,6 +6,7 @@ import {
   getConnectionString,
   getDataFromKiwiUrl,
   mayBeConnectionString,
+  mediaTrackConstraints,
   ConnectionType,
   debounce,
 } from './Utils'
@@ -218,6 +219,17 @@ describe('connection strings', () => {
     expect(mayBeConnectionString(ConnectionType.HOST, 'kiwi://h/Kiwi/')).toBe(false)
     expect(mayBeConnectionString(ConnectionType.HOST, 'kiwi://h/Kiwi/not-valid')).toBe(false)
     expect(mayBeConnectionString(ConnectionType.HOST, 'not a url')).toBe(false)
+  })
+})
+
+describe('mediaTrackConstraints', () => {
+  it('uses the system default when no device is selected', () => {
+    expect(mediaTrackConstraints('')).toBe(true)
+    expect(mediaTrackConstraints(undefined)).toBe(true)
+  })
+
+  it('prefers the selected device id', () => {
+    expect(mediaTrackConstraints('cam-1')).toEqual({ deviceId: { ideal: 'cam-1' } })
   })
 })
 

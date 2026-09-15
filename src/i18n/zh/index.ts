@@ -87,6 +87,9 @@ const zh = {
   debug_clear: '清空日志',
   debug_copy: '复制日志',
   debug_empty: '暂无调试日志。请复现问题后复制日志。',
+  camera_device: '摄像头',
+  microphone_device: '麦克风',
+  default_media_device: '系统默认',
 } satisfies Translation
 
 export default zh
